@@ -1,0 +1,60 @@
+#Estamos descrevendo, aqui nesse arquivo de configurações, o que o kubernetes deve fazer
+#Primeiro o kubernetes tem que ir lá no nosso docker registry (Aonde fica os nossos containers)
+#Ao chegar lá, pegue uma imagem e execute mais de um container para aquela imagem                             
+#Assim teremos vários containers para a mesma imagem (Geralmente um pod tem apenas 1 container)
+
+#Teremos 2 pods rodando os containers baseados na mesma imagem do nosso 'transaction service'
+#Assim existirá duas instâncias da nossa aplicação que podem responder as requisições
+# OBS: Podemos ter mais de um container em um pod. Porém normalmente temos apenas 1 container dentro de 1 pod
+
+#Caso um pod tenha algum problema, o kubernetes irá subir outro automaticamente, mantendo sempre o mesmo número de pods que nós    
+#configuramos anteriormente
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  namespace: quarkus-cqrs-demo
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: NodePort
+  selector:
+    app: transaction-app
+    namespace: quarkus-cqrs-demo
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-app
+  namespace: quarkus-cqrs-demo
+spec:
+  #Número de instâncias (Número de pods). O nosso kubernetes manterá sempre o mesmo número de pods. Caso um der erro, subirá outro
+  replicas: 2
+  selector:
+    matchLabels:
+      app: transaction-app
+      namespace: quarkus-cqrs-demo
+  template:
+    metadata:
+      labels:
+        app: transaction-app
+        namespace: quarkus-cqrs-demo
+    spec:
+      containers:
+        - name: transaction-app
+          image: moduscreate/quarkus-transaction-service:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              port: 8080
+              path: /transaction-service/health/live
+          readinessProbe:
+            httpGet:
+              path: /transaction-service/health/ready
+              port: 8080
